@@ -1,5 +1,6 @@
 
 import logging
+import os
 import subprocess
 import time
 
@@ -15,7 +16,8 @@ except ImportError:
 
 
 logger = logging.getLogger('KomKastKiller')
-handler = RotatingFileHandler("komkastkiller.log", maxBytes=10000, backupCount=10)
+logger.setLevel(logging.INFO)
+handler = RotatingFileHandler("/var/log/komkastkiller.log", maxBytes=10000, backupCount=10)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -111,6 +113,8 @@ class MonitoringStateMachine:
     
     def run(self):
 
+        logger.info("Starting.")
+        
         while self._state != MonitoringStateMachine.HALT:
             time.sleep(1)
 

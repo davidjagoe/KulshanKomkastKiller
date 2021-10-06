@@ -1,0 +1,13 @@
+[Unit]
+Description=Kulshan Komkast Killer
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/pi/bin/kulshankomkastkiller.py
+KillSignal=SIGTERM
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=kkiller.service
