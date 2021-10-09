@@ -24,7 +24,7 @@ except ImportError:
 
 
 log = logging.getLogger('KomKastKiller')
-log.setLevel(logging.INFO)
+log.setLevel(logging.WARN)
 handler = RotatingFileHandler("/var/log/komkastkiller.log", maxBytes=10000, backupCount=10)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
@@ -70,17 +70,25 @@ class Modem:
     
 class InternetMonitor:
 
-    def __init__(self, *hosts_to_ping, local_interface):
+    def __init__(self, *hosts_to_ping, local_interface, acceptable_no_ping_seconds):
         self._hosts_to_ping = hosts_to_ping
         self._interface = local_interface
+        self._acceptable_no_ping_seconds = acceptable_no_ping_seconds
+        self._last_ping = datetime.now()
         self._up_since = None
         self._down_since = None
         
     def is_up(self):
+        now = datetime.now()
         ping_results = [can_ping(ip, self._interface) for ip in self._hosts_to_ping]
-        internet_up = any(ping_results)
+        good_ping = any(ping_results)
 
-        if not(internet_up):
+        if good_ping:
+            self._last_ping = datetime.now()
+
+        time_since_last_ping = now - self._last_ping
+            
+        if not(good_ping) and (time_since_last_ping.seconds > self._acceptable_no_ping_seconds):
             self._up_since = None
             self._down_since = datetime.now()
         elif self._up_since is None:
@@ -147,9 +155,9 @@ class MonitoringStateMachine:
                     log.warning("Internet down... rebooting modem.")
 
             if self._state == MonitoringStateMachine.REBOOT_MODEM:
-                log.info("About to remove power...")
+                log.warning("About to remove power...")
                 self._pi.power_cycle_modem()
-                log.info("Power has been restored.")
+                log.warning("Power has been restored.")
                 self._state = MonitoringStateMachine.MONITORING_MODEM
 
 
@@ -166,7 +174,7 @@ class MonitoringStateMachine:
 def main():
     # Note: change 'lo' below to 'eth0' before using in production.
     modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=120))
-    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface="wlan0")
+    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface="eth0", acceptable_no_ping_seconds=60)
     pi = RaspberryPi(modem)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
