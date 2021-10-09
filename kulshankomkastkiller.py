@@ -29,7 +29,7 @@ def can_ping(ip_address):
 
 class Modem:
 
-    def __init__(self, lan_ip, minimum_power_off_duration, boot_duration):
+    def __init__(self, local_interface, lan_ip, minimum_power_off_duration, boot_duration):
         self._lan_ip = lan_ip
         self._power_off_duration = minimum_power_off_duration
         self._boot_duration = boot_duration
@@ -61,7 +61,7 @@ class Modem:
     
 class InternetMonitor:
 
-    def __init__(self, *hosts_to_ping):
+    def __init__(self, *hosts_to_ping, local_interface):
         self._hosts_to_ping = hosts_to_ping
         self._up_since = None
         self._down_since = None
@@ -143,22 +143,20 @@ class MonitoringStateMachine:
                 self._state = MonitoringStateMachine.MONITORING_MODEM
 
 
-            # HOLD: Syslog logging
-            
             # HOLD: need to add protection for doing too many power cycles
             # per time. Need to add logic to back off, or just do maximum
             # of 1 cycle per hour or whatever.
 
-            # HOLD: Init scripts to start and stop this script as a service
-            #       (also will need to implement HALT state)
+            # HOLD: implement HALT state to close gracefully.
 
-            # HOLD: Configuration file?
+            # HOLD: Configuration file
 
 
             
 def main():
-    modem = Modem(lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=1), boot_duration=timedelta(seconds=10))
-    internet = InternetMonitor("google.com", "75.75.75.75")
+    ethernet_interface = "eth0"
+    modem = Modem(local_interface=ethernet_interface, lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=10), boot_duration=timedelta(seconds=120))
+    internet = InternetMonitor("google.com", "75.75.75.75", local_interface=ethernet_interface)
     pi = RaspberryPi(modem)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
