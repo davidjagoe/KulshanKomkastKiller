@@ -1,4 +1,12 @@
 
+"""kulshankomkastkiller.py
+
+Install this script to /home/pi/bin and update the settings in main()
+as necessary.
+
+"""
+
+
 import logging
 import os
 import subprocess

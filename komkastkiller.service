@@ -1,3 +1,11 @@
+
+# komkastkiller.service
+
+# Install this script to /lib/systemd/system/kkiller.service and
+  enable the service using the command:
+
+# $ sudo systemctl enable kkiller.service
+
 [Unit]
 Description=Kulshan Komkast Killer
 After=network.target
