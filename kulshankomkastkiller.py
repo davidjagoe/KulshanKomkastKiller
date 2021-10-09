@@ -164,9 +164,9 @@ class MonitoringStateMachine:
 
             
 def main():
-    ethernet_interface = "eth0"
-    modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=20))
-    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface=ethernet_interface)
+    # Note: change 'lo' below to 'eth0' before using in production.
+    modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=120))
+    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface="wlan0")
     pi = RaspberryPi(modem)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
