@@ -23,21 +23,22 @@ except ImportError:
     import fakeio as io
 
 
-logger = logging.getLogger('KomKastKiller')
-logger.setLevel(logging.INFO)
+log = logging.getLogger('KomKastKiller')
+log.setLevel(logging.INFO)
 handler = RotatingFileHandler("/var/log/komkastkiller.log", maxBytes=10000, backupCount=10)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
-logger.addHandler(handler)
+log.addHandler(handler)
 
 
-def can_ping(ip_address):
-    return subprocess.call(["ping", "-c", "1", ip_address], stdout=DEVNULL, stderr=DEVNULL) == 0
+def can_ping(ip_address, interface):
+    return subprocess.call(["ping", "-c", "1", "-W", "5", "-I", interface, ip_address], stdout=DEVNULL, stderr=DEVNULL) == 0
 
 
 class Modem:
 
     def __init__(self, local_interface, lan_ip, minimum_power_off_duration, boot_duration):
+        self._interface = local_interface
         self._lan_ip = lan_ip
         self._power_off_duration = minimum_power_off_duration
         self._boot_duration = boot_duration
@@ -57,7 +58,7 @@ class Modem:
         return (datetime.now() - self._last_reboot) < self._boot_duration
 
     def is_responsive(self):
-        alive = can_ping(self._lan_ip)
+        alive = can_ping(self._lan_ip, self._interface)
         if not(alive):
             self._up_since = None
             self._down_since = datetime.now()
@@ -71,11 +72,12 @@ class InternetMonitor:
 
     def __init__(self, *hosts_to_ping, local_interface):
         self._hosts_to_ping = hosts_to_ping
+        self._interface = local_interface
         self._up_since = None
         self._down_since = None
         
     def is_up(self):
-        ping_results = [can_ping(ip) for ip in self._hosts_to_ping]
+        ping_results = [can_ping(ip, self._interface) for ip in self._hosts_to_ping]
         internet_up = any(ping_results)
 
         if not(internet_up):
@@ -121,33 +123,33 @@ class MonitoringStateMachine:
     
     def run(self):
 
-        logger.info("Starting.")
+        log.info("Starting.")
         
         while self._state != MonitoringStateMachine.HALT:
             time.sleep(1)
 
             if self._state == MonitoringStateMachine.MONITORING_MODEM:
                 if self._modem.is_currently_booting():
-                    logger.info("Modem was recently rebooted... waiting.")
+                    log.info("Modem was recently rebooted... waiting.")
                 else:
 
                     if self._modem.is_responsive():
                         self._state = MonitoringStateMachine.MONITORING_INTERNET
-                        logger.info("Modem is responsive, going to monitor internet.")
+                        log.info("Modem is responsive, going to monitor internet.")
                     else:
-                        logger.warning("Modem unresponsive!")
+                        log.warning("Modem unresponsive!")
 
             if self._state == MonitoringStateMachine.MONITORING_INTERNET:
                 if self._internet.is_up():
-                    logger.info("Internet is up.")
+                    log.info("Internet is up.")
                 else:
                     self._state = MonitoringStateMachine.REBOOT_MODEM
-                    logger.warning("Internet down... rebooting modem.")
+                    log.warning("Internet down... rebooting modem.")
 
             if self._state == MonitoringStateMachine.REBOOT_MODEM:
-                logger.info("About to remove power...")
+                log.info("About to remove power...")
                 self._pi.power_cycle_modem()
-                logger.info("Power has been restored.")
+                log.info("Power has been restored.")
                 self._state = MonitoringStateMachine.MONITORING_MODEM
 
 
@@ -163,8 +165,8 @@ class MonitoringStateMachine:
             
 def main():
     ethernet_interface = "eth0"
-    modem = Modem(local_interface=ethernet_interface, lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=10), boot_duration=timedelta(seconds=120))
-    internet = InternetMonitor("google.com", "75.75.75.75", local_interface=ethernet_interface)
+    modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=20))
+    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface=ethernet_interface)
     pi = RaspberryPi(modem)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
@@ -173,5 +175,9 @@ def main():
     
 
 if __name__ == "__main__":
-    main()
-    
+    try:
+        main()
+    except Exception as err:
+        log.critical(f"Unexpected {err}, {type(err)}")
+        log.critical(traceback.format_exc())
+        raise
