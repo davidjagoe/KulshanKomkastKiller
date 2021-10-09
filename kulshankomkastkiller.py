@@ -78,6 +78,9 @@ class InternetMonitor:
         self._up_since = None
         self._down_since = None
         
+    def notify_reboot(self):
+        self._last_ping = datetime.now()
+
     def is_up(self):
         now = datetime.now()
         ping_results = [can_ping(ip, self._interface) for ip in self._hosts_to_ping]
@@ -102,14 +105,16 @@ class RaspberryPi:
 
     RELAY_GPIO = 17
 
-    def __init__(self, modem):
+    def __init__(self, modem, internet_monitor):
         self._relay_output = io.OutputDevice(self.RELAY_GPIO, initial_value=False, active_high=True)
         self._modem = modem
+        self._internet_monitor = internet_monitor
     
     def power_cycle_modem(self):
         def _sleep(dt):
             time.sleep(dt.seconds)
         self._modem.notify_reboot()
+        self._internet_monitor.notify_reboot()
         self._relay_output.on()
         _sleep(self._modem.get_power_off_duration())
         self._relay_output.off()
@@ -175,7 +180,7 @@ def main():
     # Note: change 'lo' below to 'eth0' before using in production.
     modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=120))
     internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface="eth0", acceptable_no_ping_seconds=60)
-    pi = RaspberryPi(modem)
+    pi = RaspberryPi(modem, internet)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
     state_machine.run()
