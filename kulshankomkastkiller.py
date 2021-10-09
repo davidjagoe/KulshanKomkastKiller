@@ -32,7 +32,7 @@ log.addHandler(handler)
 
 
 def can_ping(ip_address, interface):
-    return subprocess.call(["ping", "-c", "1", "-W", "5", "-I", interface, ip_address], stdout=DEVNULL, stderr=DEVNULL) == 0
+    return subprocess.call(["ping", "-c", "1", "-W", "10", "-I", interface, ip_address], stdout=DEVNULL, stderr=DEVNULL) == 0
 
 
 class Modem:
