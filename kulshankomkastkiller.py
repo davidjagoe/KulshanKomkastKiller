@@ -24,8 +24,11 @@ except ImportError:
 
 
 log = logging.getLogger('KomKastKiller')
-log.setLevel(logging.WARN)
-handler = RotatingFileHandler("/var/log/komkastkiller.log", maxBytes=10000, backupCount=10)
+log.setLevel(logging.INFO)
+try:
+    handler = RotatingFileHandler("/var/log/komkastkiller.log", maxBytes=1000000, backupCount=10)
+except PermissionError:
+    handler = RotatingFileHandler("/tmp/komkastkiller.log", maxBytes=10000, backupCount=10)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 log.addHandler(handler)
@@ -33,6 +36,13 @@ log.addHandler(handler)
 
 def can_ping(ip_address, interface):
     return subprocess.call(["ping", "-c", "1", "-W", "10", "-I", interface, ip_address], stdout=DEVNULL, stderr=DEVNULL) == 0
+
+
+def can_curl(host, interface, max_time="10"):
+    # Note, ideally we would include the "--dns-interface eth0" option
+    # but that option does not exist on the libcurl provided on
+    # raspberry-pi os.
+    return subprocess.call(["curl", "--interface", interface, "--max-time", max_time, "--head", host], stdout=DEVNULL, stderr=DEVNULL) == 0
 
 
 class Modem:
@@ -67,31 +77,32 @@ class Modem:
             self._down_since = None
         return self._up_since is not None
 
-    
+
 class InternetMonitor:
 
-    def __init__(self, *hosts_to_ping, local_interface, acceptable_no_ping_seconds):
-        self._hosts_to_ping = hosts_to_ping
+    def __init__(self, *remote_hosts, local_interface, acceptable_no_comms_seconds, curl_max_time):
+        self._remote_hosts = remote_hosts
         self._interface = local_interface
-        self._acceptable_no_ping_seconds = acceptable_no_ping_seconds
-        self._last_ping = datetime.now()
+        self._acceptable_no_comms_seconds = acceptable_no_comms_seconds
+        self._curl_max_time = str(curl_max_time)
+        self._last_curl = datetime.now()
         self._up_since = None
         self._down_since = None
         
     def notify_reboot(self):
-        self._last_ping = datetime.now()
+        self._last_curl = datetime.now()
 
     def is_up(self):
         now = datetime.now()
-        ping_results = [can_ping(ip, self._interface) for ip in self._hosts_to_ping]
-        good_ping = any(ping_results)
+        curl_results = [can_curl(host, self._interface, self._curl_max_time) for host in self._remote_hosts]
+        good_curl = any(curl_results)
 
-        if good_ping:
-            self._last_ping = datetime.now()
+        if good_curl:
+            self._last_curl = datetime.now()
 
-        time_since_last_ping = now - self._last_ping
+        time_since_last_curl = now - self._last_curl
             
-        if not(good_ping) and (time_since_last_ping.seconds > self._acceptable_no_ping_seconds):
+        if not(good_curl) and (time_since_last_curl.seconds > self._acceptable_no_comms_seconds):
             self._up_since = None
             self._down_since = datetime.now()
         elif self._up_since is None:
@@ -179,7 +190,7 @@ class MonitoringStateMachine:
 def main():
     # Note: change 'lo' below to 'eth0' before using in production.
     modem = Modem(local_interface="lo", lan_ip="0.0.0.0", minimum_power_off_duration=timedelta(seconds=5), boot_duration=timedelta(seconds=120))
-    internet = InternetMonitor("8.8.8.8", "1.1.1.1", local_interface="eth0", acceptable_no_ping_seconds=60)
+    internet = InternetMonitor("google.com", "facebook.com", local_interface="eth0", acceptable_no_comms_seconds=60, curl_max_time=5)
     pi = RaspberryPi(modem, internet)
 
     state_machine = MonitoringStateMachine(modem, internet, pi)
