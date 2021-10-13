@@ -1,8 +1,37 @@
 
 """kulshankomkastkiller.py
 
-Install this script to /home/pi/bin and update the settings in main()
-as necessary.
+Copyright 2021 David Jagoe.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+Hardware:
+
+  - This software runs on a RaspberryPi. Only models 3B and 4B have
+    been tested. You will additionally need to provide an appropriate
+    relay. HOLD for further BOM documentation.
+
+
+Installation instructions:
+
+  - Install this script to /home/pi/bin and update the settings in
+    main() as necessary.
+
+  - Install the accompanying komkastkiller.service to
+    /lib/systemd/system/kkiller.service and enable the service using
+    the command: 'sudo systemctl enable kkiller.service'.
 
 """
 
@@ -141,6 +170,7 @@ class MonitoringStateMachine:
 
     def __init__(self, modem_monitor, internet_monitor, raspberry_pi):
         self._state = MonitoringStateMachine.MONITORING_MODEM
+        self._prev_state = None
         self._modem = modem_monitor
         self._internet = internet_monitor
         self._pi = raspberry_pi
@@ -151,29 +181,32 @@ class MonitoringStateMachine:
         
         while self._state != MonitoringStateMachine.HALT:
             time.sleep(1)
+            if self._state != self._prev_state:
+                log.info("Entered state <{0}>".format(self._state))
+                self._prev_state = self._state
 
             if self._state == MonitoringStateMachine.MONITORING_MODEM:
                 if self._modem.is_currently_booting():
-                    log.info("Modem was recently rebooted... waiting.")
+                    log.debug("Modem was recently rebooted... waiting.")
                 else:
 
                     if self._modem.is_responsive():
                         self._state = MonitoringStateMachine.MONITORING_INTERNET
-                        log.info("Modem is responsive, going to monitor internet.")
+                        log.debug("Modem is responsive, going to monitor internet.")
                     else:
                         log.warning("Modem unresponsive!")
 
-            if self._state == MonitoringStateMachine.MONITORING_INTERNET:
+            elif self._state == MonitoringStateMachine.MONITORING_INTERNET:
                 if self._internet.is_up():
-                    log.info("Internet is up.")
+                    log.debug("Internet is up.")
                 else:
                     self._state = MonitoringStateMachine.REBOOT_MODEM
-                    log.warning("Internet down... rebooting modem.")
+                    log.debug("Internet down... rebooting modem.")
 
-            if self._state == MonitoringStateMachine.REBOOT_MODEM:
-                log.warning("About to remove power...")
+            elif self._state == MonitoringStateMachine.REBOOT_MODEM:
+                log.debug("About to remove power...")
                 self._pi.power_cycle_modem()
-                log.warning("Power has been restored.")
+                log.debug("Power has been restored.")
                 self._state = MonitoringStateMachine.MONITORING_MODEM
 
 
