@@ -1,0 +1,5 @@
+
+* MAC addresses
+** RPi 3B
+  - eth0  b8:27:eb:6b:f7:f5
+  - wlan0 b8:27:eb:3e:a2:a0
